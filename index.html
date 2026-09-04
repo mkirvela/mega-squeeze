@@ -239,16 +239,8 @@
   }
   .holdHint{
     font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.11em;
-    text-transform:uppercase;color:var(--cream-dim);opacity:.65;white-space:nowrap;
+    text-transform:uppercase;color:var(--cream-dim);opacity:.8;white-space:nowrap;
   }
-  .amtToggle{display:flex;gap:4px;background:rgba(0,0,0,.32);padding:3px;border-radius:10px}
-  .amtToggle button{
-    border:0;background:none;color:var(--cream-dim);cursor:pointer;
-    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.08em;
-    padding:5px 9px;border-radius:7px;
-  }
-  .amtToggle button[aria-pressed="true"]{background:var(--juice);color:#2B1400}
-
   #cards{
     overflow-y:auto;overscroll-behavior:contain;
     display:flex;flex-direction:column;gap:8px;
@@ -504,8 +496,8 @@
     #handle .hx{font-size:11px;color:var(--cream-dim);transition:transform .34s}
     #shop.open #handle .hx{transform:rotate(180deg)}
 
-    .shopHead{justify-content:flex-end}
-    .shopHead h2,.holdHint{display:none}
+    .shopHead{justify-content:flex-start;padding:0 2px}
+    .shopHead h2{display:none}
     #cards{flex:1;min-height:0;padding-bottom:10px}
     .card{padding:13px}
     .card .nm{font-size:15px}
@@ -617,12 +609,7 @@
 
     <div class="shopHead">
       <h2>PRESS ROOM</h2>
-      <span class="holdHint">hold to keep buying</span>
-      <div class="amtToggle" role="group" aria-label="Buy amount">
-        <button data-amt="1" aria-pressed="true">×1</button>
-        <button data-amt="10" aria-pressed="false">×10</button>
-        <button data-amt="max" aria-pressed="false">MAX</button>
-      </div>
+      <span class="holdHint">tap to buy · hold to keep buying</span>
     </div>
 
     <div id="cards"></div>
@@ -684,7 +671,7 @@ const UPGRADES = [
 /* ══ state ═══════════════════════════════════════════════════ */
 const S = {
   juice:0, total:0, taps:0, run:0, crits:0, replants:0,
-  best:0, own:{}, muted:false, amt:1, seen:Date.now(),
+  best:0, own:{}, muted:false, seen:Date.now(),
 };
 UPGRADES.forEach(u => S.own[u.id] = 0);
 
@@ -727,18 +714,6 @@ function costOf(u, n){
   if (u.max && owned >= u.max) return Infinity;
   const cap = u.max ? Math.min(n, u.max - owned) : n;
   return u.base * Math.pow(u.r, owned) * (Math.pow(u.r, cap) - 1) / (u.r - 1);
-}
-function maxAffordable(u){
-  const owned = S.own[u.id];
-  const room = u.max ? u.max - owned : 9999;
-  if (room <= 0) return 0;
-  let n = 0, spent = 0;
-  while (n < room && n < 9999){
-    const next = u.base * Math.pow(u.r, owned + n);
-    if (spent + next > S.juice) break;
-    spent += next; n++;
-  }
-  return n;
 }
 const replantNeed = () => 5e5 * Math.pow(14, S.replants);
 
@@ -1486,16 +1461,13 @@ for (const u of UPGRADES){
 }
 
 function buy(u, el, held){
-  let n = S.amt === 'max' ? maxAffordable(u) : S.amt;
-  if (u.max) n = Math.min(n, u.max - S.own[u.id]);
-  if (n <= 0) return false;
-  let c = costOf(u, n);
-  while (n > 1 && c > S.juice){ n--; c = costOf(u, n); }
-  if (n <= 0 || c > S.juice) return false;
+  if (u.max && S.own[u.id] >= u.max) return false;
+  const c = costOf(u, 1);
+  if (c > S.juice) return false;
 
-  S.juice -= c; S.own[u.id] += n;
+  S.juice -= c; S.own[u.id]++;
   const toneStep = held ? buyLevels : null;
-  if (held) buyLevels += n;
+  if (held) buyLevels++;
   sfxBuy(toneStep);
 
   const r = el.getBoundingClientRect();
@@ -1546,14 +1518,6 @@ function stopBuyHold(){
   if (buyStreak) save();
   buyArm = buyTick = buyCard = null; buyStreak = 0; buyLevels = 0;
 }
-
-document.querySelectorAll('.amtToggle button').forEach(b => {
-  b.addEventListener('click', () => {
-    S.amt = b.dataset.amt === 'max' ? 'max' : Number(b.dataset.amt);
-    document.querySelectorAll('.amtToggle button').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
-    render(true); sfxBuy();
-  });
-});
 
 /* ══ HUD render ══════════════════════════════════════════════ */
 const elJuice = $('juiceNum'), elJps = $('jps'), elRankChip = $('rankChip').querySelector('b');
@@ -1609,17 +1573,15 @@ function render(force){
   for (const u of UPGRADES){
     const R = refs[u.id], owned = S.own[u.id];
     const maxed = u.max && owned >= u.max;
-    let n = S.amt === 'max' ? Math.max(1, maxAffordable(u)) : S.amt;
-    if (u.max) n = Math.min(n, Math.max(1, u.max - owned));
-    const c = costOf(u, n);
+    const c = costOf(u, 1);
     const afford = !maxed && c <= S.juice;
 
     R.el.classList.toggle('afford', !!afford);
     R.el.classList.toggle('maxed', !!maxed);
     R.el.classList.toggle('bestbuy', u.id === bestId);
-    R.cost.textContent = maxed ? 'MAXED' : fmt(c) + (n > 1 ? ` ·${n}` : '');
+    R.cost.textContent = maxed ? 'MAXED' : fmt(c);
     R.lvl.textContent = 'LV ' + owned + (u.max ? '/' + u.max : '');
-    const eff = u.kind === 'crit' ? u.val * n : u.val * n * groveMul() * rankMul();
+    const eff = u.kind === 'crit' ? u.val : u.val * groveMul() * rankMul();
     R.ef.textContent = u.note(eff);
   }
 }
