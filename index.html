@@ -1,0 +1,1689 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1A0B16">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Mega Squeeze</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Outfit:wght@400;600;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap">
+<style>
+  :root{
+    --ground:#1A0B16;
+    --ground-2:#2A1024;
+    --ground-3:#3A1630;
+    --cream:#FFF1DC;
+    --cream-dim:#C9A9B8;
+    --rind:#FFC93C;
+    --pulp:#FF6A2B;
+    --flesh:#F0245F;
+    --leaf:#2FD08A;
+    --juice:#FFC93C;
+    --heat:0;
+    --display:"Bungee","Arial Black",system-ui,sans-serif;
+    --body:"Outfit","Avenir Next",system-ui,sans-serif;
+    --mono:"IBM Plex Mono","SFMono-Regular",ui-monospace,monospace;
+  }
+
+  *{box-sizing:border-box}
+
+  html{
+    height:100%;
+    overscroll-behavior:none;
+    -webkit-text-size-adjust:100%;
+  }
+
+  body{
+    margin:0;
+    position:fixed;      /* no rubber-band, no pull-to-refresh */
+    inset:0;
+    overflow:hidden;
+    overscroll-behavior:none;
+    -webkit-touch-callout:none;
+    -webkit-user-select:none;
+    background:
+      radial-gradient(120% 90% at 22% 18%, color-mix(in oklab, var(--juice) 14%, transparent) 0%, transparent 55%),
+      radial-gradient(90% 70% at 88% 92%, rgba(240,36,95,.16) 0%, transparent 60%),
+      linear-gradient(168deg, var(--ground-2) 0%, var(--ground) 58%, #12060F 100%);
+    color:var(--cream);
+    font-family:var(--body);
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    user-select:none;
+  }
+
+  /* ─── FX canvas ─────────────────────────────────────────── */
+  #fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:40}
+
+  #vignette{
+    position:fixed;inset:0;pointer-events:none;z-index:35;
+    box-shadow:inset 0 0 min(26vw,240px) min(2vw,18px) color-mix(in oklab, var(--juice) 55%, #000);
+    opacity:calc(.12 + var(--heat) * .55);
+    transition:opacity .18s linear;
+  }
+
+  #flash{
+    position:fixed;inset:0;pointer-events:none;z-index:45;
+    background:var(--cream);opacity:0;mix-blend-mode:soft-light;
+  }
+
+  /* ─── shell ─────────────────────────────────────────────── */
+  #world{
+    position:relative;height:100%;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) clamp(300px,27vw,372px);
+    grid-template-rows:auto minmax(0,1fr);
+    grid-template-areas:"bar bar" "arena shop";
+    column-gap:clamp(12px,2vw,26px);
+    padding:
+      calc(clamp(10px,1.6vw,20px) + env(safe-area-inset-top))
+      calc(clamp(10px,1.6vw,20px) + env(safe-area-inset-right))
+      calc(clamp(10px,1.6vw,20px) + env(safe-area-inset-bottom))
+      calc(clamp(10px,1.6vw,20px) + env(safe-area-inset-left));
+  }
+
+  /* the press-room drawer handle & scrim exist only on small screens */
+  #handle{display:none}
+  #scrim{display:none}
+
+  /* ─── top bar ───────────────────────────────────────────── */
+  #bar{
+    grid-area:bar;
+    display:flex;align-items:center;gap:clamp(10px,1.6vw,22px);
+    padding:0 4px 12px;
+    flex-wrap:wrap;
+  }
+
+  .brand{display:flex;align-items:baseline;gap:9px}
+  .brand h1{
+    font-family:var(--display);font-size:clamp(17px,2.5vw,27px);
+    margin:0;letter-spacing:.01em;line-height:1;
+    color:var(--rind);
+    text-shadow:0 3px 0 #8A4A00, 0 5px 0 rgba(0,0,0,.35);
+  }
+  .brand h1 em{font-style:normal;color:var(--flesh);text-shadow:0 3px 0 #6E0A28, 0 5px 0 rgba(0,0,0,.35)}
+  .brand .sub{
+    font-family:var(--mono);font-size:10px;font-weight:600;
+    letter-spacing:.18em;text-transform:uppercase;color:var(--cream-dim);
+  }
+
+  .readout{display:flex;align-items:baseline;gap:10px;line-height:1;margin-right:auto}
+  #juiceNum{
+    font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums;
+    font-size:clamp(28px,5.4vw,54px);
+    color:var(--cream);
+    text-shadow:0 0 28px color-mix(in oklab, var(--juice) 60%, transparent);
+    letter-spacing:-.02em;
+  }
+  #juiceUnit{font-family:var(--display);font-size:clamp(11px,1.4vw,15px);color:var(--juice)}
+  #jps{
+    font-family:var(--mono);font-size:12px;font-weight:600;color:var(--leaf);
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* lifetime odometer — never resets, not even on replant */
+  #life{
+    display:flex;flex-direction:column;gap:2px;
+    padding:6px 14px;border-radius:12px;
+    background:rgba(0,0,0,.3);
+    border:1.5px solid rgba(255,241,220,.12);
+    border-left:3px solid var(--flesh);
+  }
+  #life .k{
+    font-family:var(--mono);font-size:8.5px;font-weight:700;
+    letter-spacing:.17em;text-transform:uppercase;color:var(--cream-dim);
+    white-space:nowrap;
+  }
+  #lifeNum{
+    font-family:var(--mono);font-size:19px;font-weight:700;
+    font-variant-numeric:tabular-nums;line-height:1;
+    color:var(--cream);transform-origin:left center;will-change:transform;
+  }
+
+  .chip{
+    display:inline-flex;align-items:center;gap:7px;
+    padding:7px 12px;border-radius:999px;
+    background:rgba(255,241,220,.06);
+    border:1.5px solid rgba(255,241,220,.14);
+    font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
+  }
+  .chip .dot{width:8px;height:8px;border-radius:99px;background:var(--juice);box-shadow:0 0 10px var(--juice)}
+
+  #rankChip{border-color:color-mix(in oklab, var(--juice) 45%, transparent)}
+  #rankChip b{font-family:var(--display);font-size:11px;letter-spacing:.02em;color:var(--juice);text-transform:none}
+
+  .iconbtn{
+    width:38px;height:38px;flex:0 0 auto;border-radius:12px;cursor:pointer;
+    background:rgba(255,241,220,.06);border:1.5px solid rgba(255,241,220,.14);
+    color:var(--cream);font-size:15px;display:grid;place-items:center;
+    font-family:var(--body);
+  }
+  .iconbtn:hover{background:rgba(255,241,220,.13)}
+  .iconbtn[aria-pressed="true"]{color:var(--cream-dim);opacity:.6}
+
+  /* ─── arena ─────────────────────────────────────────────── */
+  #arena{
+    grid-area:arena;position:relative;min-height:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:clamp(6px,1.4vh,16px);
+  }
+
+  #fruitWrap{position:relative;display:grid;place-items:center;isolation:isolate}
+
+  /* the glass is drawn on the FX canvas; this slot just reserves its box */
+  #glassBay{display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto}
+  #glassSlot{
+    width:clamp(92px,11vw,138px);
+    height:clamp(112px,17vh,178px);
+  }
+  #glassCap{
+    font-family:var(--mono);font-size:9.5px;font-weight:700;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--cream-dim);
+    white-space:nowrap;
+  }
+  #glassCap b{color:var(--juice);font-weight:700}
+
+  #glow{
+    position:absolute;width:150%;aspect-ratio:1;border-radius:50%;
+    background:radial-gradient(circle, color-mix(in oklab, var(--juice) 42%, transparent) 0%, transparent 62%);
+    filter:blur(14px);
+    opacity:calc(.5 + var(--heat)*.5);
+    z-index:-1;
+  }
+
+  #fruit{
+    width:min(31vw,min(38vh,360px));aspect-ratio:1;
+    border:0;padding:0;background:none;cursor:pointer;
+    display:grid;place-items:center;
+    will-change:transform;
+    filter:drop-shadow(0 24px 34px rgba(0,0,0,.5));
+  }
+  #fruit svg{width:100%;height:100%;display:block;overflow:visible}
+  #fruit:focus{outline:none}
+  #fruit:focus-visible{outline:3px dashed var(--cream);outline-offset:14px;border-radius:50%}
+
+  #ringHost{position:absolute;inset:0;pointer-events:none}
+
+  #comboBadge{
+    position:absolute;top:-2%;right:-6%;
+    font-family:var(--display);font-size:clamp(16px,2.6vw,30px);
+    color:var(--cream);
+    padding:8px 15px;border-radius:14px;
+    background:linear-gradient(150deg,var(--pulp),var(--flesh));
+    box-shadow:0 8px 0 rgba(0,0,0,.35), 0 0 34px color-mix(in oklab, var(--flesh) 55%, transparent);
+    transform:rotate(7deg) scale(0);
+    transition:transform .16s cubic-bezier(.2,1.7,.4,1);
+    white-space:nowrap;
+  }
+  #comboBadge.on{transform:rotate(7deg) scale(1)}
+
+  #tapHint{
+    font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--cream-dim);white-space:nowrap;
+    animation:hintPulse 2.4s ease-in-out infinite;
+  }
+  @keyframes hintPulse{0%,100%{opacity:.45}50%{opacity:.95}}
+
+  /* ─── shop ──────────────────────────────────────────────── */
+  #shop{
+    grid-area:shop;min-height:0;
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .shopHead{display:flex;align-items:center;gap:8px}
+  .shopHead h2{
+    font-family:var(--display);font-size:13px;margin:0;letter-spacing:.02em;
+    color:var(--cream);margin-right:auto;
+  }
+  .amtToggle{display:flex;gap:4px;background:rgba(0,0,0,.32);padding:3px;border-radius:10px}
+  .amtToggle button{
+    border:0;background:none;color:var(--cream-dim);cursor:pointer;
+    font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.08em;
+    padding:5px 9px;border-radius:7px;
+  }
+  .amtToggle button[aria-pressed="true"]{background:var(--juice);color:#2B1400}
+
+  #cards{
+    overflow-y:auto;overscroll-behavior:contain;
+    display:flex;flex-direction:column;gap:8px;
+    padding:2px 4px 24px 2px;
+    mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 26px),transparent 100%);
+    scrollbar-width:thin;scrollbar-color:rgba(255,241,220,.2) transparent;
+  }
+  #cards::-webkit-scrollbar{width:7px}
+  #cards::-webkit-scrollbar-thumb{background:rgba(255,241,220,.2);border-radius:9px}
+
+  .card{
+    position:relative;display:grid;
+    grid-template-columns:44px minmax(0,1fr) auto;
+    align-items:center;gap:11px;
+    padding:11px 13px;border-radius:14px;
+    background:linear-gradient(140deg, rgba(255,241,220,.075), rgba(255,241,220,.03));
+    border:1.5px solid rgba(255,241,220,.1);
+    cursor:not-allowed;text-align:left;color:inherit;
+    font-family:inherit;
+    transition:transform .1s ease, background .18s, border-color .18s, box-shadow .18s;
+  }
+  .card .ic{
+    width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+    font-size:22px;background:rgba(0,0,0,.3);filter:grayscale(.7) opacity(.5);
+  }
+  .card .txt{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .card .nm{
+    font-weight:800;font-size:14px;letter-spacing:-.01em;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .card .ef{
+    font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--cream-dim);
+    letter-spacing:.02em;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .card .rt{text-align:right;display:grid;gap:3px;justify-items:end}
+  .card .cost{
+    font-family:var(--mono);font-size:12.5px;font-weight:700;color:var(--cream-dim);
+    font-variant-numeric:tabular-nums;
+  }
+  .card .lvl{
+    font-family:var(--display);font-size:10px;color:var(--cream-dim);opacity:.7;
+  }
+  .card.afford{
+    cursor:pointer;
+    background:linear-gradient(140deg, color-mix(in oklab, var(--juice) 22%, transparent), rgba(255,241,220,.04));
+    border-color:color-mix(in oklab, var(--juice) 55%, transparent);
+    box-shadow:0 5px 0 rgba(0,0,0,.3), 0 0 22px -6px color-mix(in oklab, var(--juice) 60%, transparent);
+  }
+  .card.afford .ic{filter:none;background:rgba(0,0,0,.34)}
+  .card.afford .cost{color:var(--juice)}
+  .card.afford:hover{transform:translateY(-2px)}
+  .card.afford:active{transform:translateY(2px) scale(.985)}
+  .card.bought{animation:cardPunch .34s cubic-bezier(.2,1.6,.35,1)}
+  @keyframes cardPunch{
+    0%{transform:scale(1)}
+    30%{transform:scale(1.055) translateY(-3px)}
+    100%{transform:scale(1)}
+  }
+  .card.maxed{opacity:.5}
+  .card.maxed .cost{color:var(--leaf)}
+
+  .card .best{
+    position:absolute;top:-7px;left:36px;
+    font-family:var(--mono);font-size:8px;font-weight:700;letter-spacing:.14em;
+    padding:2px 6px;border-radius:5px;
+    background:var(--leaf);color:#04231A;
+    opacity:0;pointer-events:none;transition:opacity .2s;
+  }
+  .card.bestbuy .best{opacity:1}
+
+  /* rank / prestige panel */
+  .panel{
+    padding:11px 13px;border-radius:14px;
+    background:rgba(0,0,0,.28);border:1.5px solid rgba(255,241,220,.1);
+  }
+  .prow{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+  .prow .k{
+    font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--cream-dim);margin-right:auto;
+  }
+  .prow .v{font-family:var(--mono);font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+  .track{height:8px;border-radius:99px;background:rgba(0,0,0,.45);overflow:hidden}
+  .track i{
+    display:block;height:100%;width:0%;border-radius:99px;
+    background:linear-gradient(90deg,var(--juice),var(--flesh));
+    box-shadow:0 0 14px color-mix(in oklab, var(--juice) 70%, transparent);
+    transition:width .35s cubic-bezier(.3,1,.4,1);
+  }
+  #replant{
+    width:100%;margin-top:10px;border:0;cursor:pointer;
+    font-family:var(--display);font-size:12px;letter-spacing:.02em;
+    padding:11px;border-radius:12px;
+    background:linear-gradient(150deg,var(--leaf),#0E6B45);
+    color:#04231A;box-shadow:0 5px 0 #06392A;
+    transition:transform .09s, filter .2s;
+  }
+  #replant:active{transform:translateY(4px);box-shadow:0 1px 0 #06392A}
+  #replant:disabled{
+    background:rgba(255,241,220,.07);color:var(--cream-dim);
+    box-shadow:none;cursor:not-allowed;
+  }
+
+  .statgrid{
+    display:grid;grid-template-columns:1fr 1fr;gap:7px 12px;
+  }
+  .statgrid div{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .statgrid span{
+    font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--cream-dim);
+  }
+  .statgrid b{font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums}
+
+  /* ─── banners & toasts ──────────────────────────────────── */
+  #banner{
+    position:fixed;inset:auto 0 auto 0;top:34%;z-index:80;
+    display:grid;place-items:center;pointer-events:none;
+  }
+  #banner .slab{
+    font-family:var(--display);text-align:center;
+    padding:18px clamp(22px,5vw,54px);border-radius:20px;
+    background:linear-gradient(150deg,var(--rind),var(--pulp));
+    color:#2B1400;
+    box-shadow:0 14px 0 rgba(0,0,0,.35), 0 0 90px color-mix(in oklab, var(--rind) 55%, transparent);
+    transform:scale(0) rotate(-4deg);opacity:0;
+  }
+  #banner .slab .kicker{
+    display:block;font-family:var(--mono);font-size:11px;font-weight:700;
+    letter-spacing:.24em;opacity:.72;margin-bottom:5px;
+  }
+  #banner .slab .big{display:block;font-size:clamp(24px,5.4vw,50px);line-height:1.05}
+  #banner .slab.show{animation:slam .95s cubic-bezier(.16,1.5,.3,1) forwards}
+  @keyframes slam{
+    0%{transform:scale(2.4) rotate(-9deg);opacity:0}
+    16%{transform:scale(1) rotate(-4deg);opacity:1}
+    72%{transform:scale(1) rotate(-4deg);opacity:1}
+    100%{transform:scale(.86) translateY(-26px) rotate(-4deg);opacity:0}
+  }
+
+  #toasts{
+    position:fixed;left:clamp(10px,1.6vw,20px);bottom:clamp(10px,1.6vw,20px);
+    z-index:55;display:flex;flex-direction:column;gap:7px;pointer-events:none;
+  }
+  .toast{
+    display:flex;align-items:center;gap:9px;
+    padding:9px 14px 9px 11px;border-radius:12px;
+    background:rgba(26,11,22,.92);border:1.5px solid color-mix(in oklab, var(--juice) 45%, transparent);
+    box-shadow:0 8px 26px rgba(0,0,0,.5);
+    font-size:12.5px;font-weight:600;
+    animation:toastIn .4s cubic-bezier(.2,1.5,.4,1);
+  }
+  .toast .tic{font-size:17px}
+  .toast small{
+    display:block;font-family:var(--mono);font-size:9.5px;font-weight:700;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--juice);
+  }
+  .toast.out{animation:toastOut .3s ease forwards}
+  @keyframes toastIn{from{transform:translateX(-115%) scale(.9);opacity:0}}
+  @keyframes toastOut{to{transform:translateX(-115%) scale(.9);opacity:0}}
+
+  /* ─── mobile: full-bleed stage, shop lives in a drawer ──── */
+  @media (max-width:860px){
+    :root{ --handleH:60px; }
+
+    #world{
+      grid-template-columns:minmax(0,1fr);
+      grid-template-rows:auto minmax(0,1fr);
+      grid-template-areas:"bar" "arena";
+      row-gap:2px;
+      padding:calc(10px + env(safe-area-inset-top)) 12px 0;
+    }
+
+    /* header: two tight rows, nothing over the play area */
+    #bar{
+      display:grid;
+      grid-template-columns:auto minmax(0,1fr) auto;
+      grid-template-areas:"brand rank mute" "read read life";
+      align-items:center;
+      gap:6px 8px;padding:0 0 2px;
+    }
+    .brand{grid-area:brand;margin:0}
+    .brand h1{font-size:15px;text-shadow:0 2px 0 #8A4A00}
+    .brand h1 em{text-shadow:0 2px 0 #6E0A28}
+    .brand .sub{display:none}
+    #rankChip{
+      grid-area:rank;justify-self:end;padding:5px 9px;
+      min-width:0;max-width:100%;overflow:hidden;
+    }
+    #rankChip .dot{flex:0 0 auto;width:7px;height:7px}
+    #rankChip b{font-size:9.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #mute{grid-area:mute;width:34px;height:34px;border-radius:10px}
+    .readout{grid-area:read;flex-wrap:wrap;column-gap:8px;row-gap:0;margin-right:0}
+    #juiceNum{font-size:clamp(30px,10vw,44px)}
+    #jps{width:100%;font-size:11px}
+    #life{grid-area:life;justify-self:end;padding:5px 10px;border-left-width:3px}
+    #life .k{font-size:7.5px;letter-spacing:.13em}
+    #life .kl{display:none}
+    #lifeNum{font-size:15px}
+
+    /* the stage is the whole screen — tap anywhere in it */
+    #arena{
+      padding-bottom:calc(var(--handleH) + env(safe-area-inset-bottom) + 10px);
+      gap:clamp(2px,1vh,12px);
+    }
+    #fruit{width:min(60vw,32dvh)}
+    #glassSlot{width:clamp(76px,20vw,112px);height:clamp(92px,14dvh,140px)}
+    #glassCap{font-size:8.5px;letter-spacing:.13em}
+    #tapHint{display:none}
+    #comboBadge{top:0;right:-2%;font-size:clamp(15px,5vw,22px);padding:6px 12px}
+
+    /* drawer */
+    #shop{
+      position:fixed;left:0;right:0;bottom:0;z-index:70;
+      height:min(76dvh,660px);
+      background:linear-gradient(180deg,#331433 0%,#1A0B16 46%);
+      border-top:1.5px solid rgba(255,241,220,.18);
+      border-radius:24px 24px 0 0;
+      box-shadow:0 -20px 60px rgba(0,0,0,.65);
+      padding:0 14px calc(env(safe-area-inset-bottom) + 12px);
+      gap:9px;
+      transform:translateY(calc(100% - var(--handleH) - env(safe-area-inset-bottom)));
+      transition:transform .38s cubic-bezier(.22,1,.32,1);
+    }
+    #shop.open{transform:translateY(0)}
+
+    #handle{
+      display:grid;
+      grid-template-columns:auto 1fr auto;
+      align-items:center;gap:10px;
+      height:var(--handleH);flex:0 0 auto;
+      margin:0 -14px;padding:0 18px;
+      border:0;background:none;color:var(--cream);
+      font-family:var(--display);font-size:13px;letter-spacing:.02em;
+      cursor:pointer;position:relative;
+    }
+    #handle .grip{
+      position:absolute;top:7px;left:50%;transform:translateX(-50%);
+      width:38px;height:4px;border-radius:99px;background:rgba(255,241,220,.28);
+    }
+    #handle .hb{
+      font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.1em;
+      padding:4px 9px;border-radius:99px;
+      background:rgba(255,241,220,.09);color:var(--cream-dim);
+      justify-self:end;
+    }
+    #handle .hb.hot{
+      background:var(--leaf);color:#04231A;
+      animation:hbPulse 1.5s ease-in-out infinite;
+    }
+    @keyframes hbPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+    #handle .hx{font-size:11px;color:var(--cream-dim);transition:transform .34s}
+    #shop.open #handle .hx{transform:rotate(180deg)}
+
+    .shopHead{justify-content:flex-end}
+    .shopHead h2{display:none}
+    #cards{flex:1;min-height:0;padding-bottom:10px}
+    .card{padding:13px}
+    .card .nm{font-size:15px}
+    .statgrid{grid-template-columns:1fr 1fr}
+    #replant{padding:14px}
+
+    #scrim{
+      display:block;position:fixed;inset:0;z-index:65;
+      background:rgba(12,4,10,.62);
+      opacity:0;pointer-events:none;transition:opacity .34s;
+      border:0;padding:0;
+    }
+    #scrim.on{opacity:1;pointer-events:auto}
+
+    #toasts{bottom:calc(var(--handleH) + env(safe-area-inset-bottom) + 12px)}
+    #banner{top:26%}
+  }
+
+  @media (max-width:380px){
+    .brand h1{font-size:13px}
+    #rankChip .dot{display:none}
+  }
+
+  /* landscape phones: keep the two-column feel, just tighter */
+  @media (max-width:860px) and (orientation:landscape) and (max-height:520px){
+    #world{
+      grid-template-columns:minmax(0,1fr) auto;
+      grid-template-areas:"bar bar" "arena arena";
+    }
+    #arena{flex-direction:row;gap:18px;padding-bottom:calc(var(--handleH) + 6px)}
+    #fruit{width:min(30vw,52dvh)}
+    #glassSlot{width:64px;height:88px}
+    #juiceNum{font-size:26px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+    #banner .slab.show{animation:none;opacity:1;transform:none}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="fx" aria-hidden="true"></canvas>
+<div id="vignette" aria-hidden="true"></div>
+<div id="flash" aria-hidden="true"></div>
+
+<div id="world">
+  <div id="bar">
+    <div class="brand">
+      <h1>MEGA <em>SQUEEZE</em></h1>
+      <span class="sub">cold-pressed empire</span>
+    </div>
+
+    <div class="readout">
+      <span id="juiceNum">0</span>
+      <span id="juiceUnit">mL</span>
+      <span id="jps">+0.0 mL/s</span>
+    </div>
+
+    <div id="life" title="Squeezes never reset — not even when you replant">
+      <span class="k"><span class="kl">Lifetime </span>squeezes</span>
+      <span id="lifeNum">0</span>
+    </div>
+
+    <div class="chip" id="rankChip"><i class="dot"></i><b>Rind Rookie</b></div>
+    <button class="iconbtn" id="mute" aria-pressed="false" aria-label="Mute sound" title="Mute sound">🔊</button>
+  </div>
+
+  <div id="arena">
+    <div id="fruitWrap">
+      <div id="glow" aria-hidden="true"></div>
+      <button id="fruit" aria-label="Squeeze the fruit"></button>
+      <div id="comboBadge" aria-hidden="true"></div>
+    </div>
+
+    <div id="glassBay">
+      <div id="glassSlot" aria-hidden="true"></div>
+      <div id="glassCap">fills to <b>Pulp Hand</b></div>
+    </div>
+
+    <div id="tapHint">tap anywhere · hold · spacebar</div>
+  </div>
+
+  <div id="shop">
+    <button id="handle" type="button" aria-expanded="false" aria-controls="cards">
+      <span class="grip"></span>
+      <span>PRESS ROOM</span>
+      <span class="hb" id="handleBadge">0 ready</span>
+      <span class="hx">▲</span>
+    </button>
+
+    <div class="panel">
+      <div class="prow">
+        <span class="k">Next rank</span>
+        <span class="v" id="rankNext">1.00K mL</span>
+      </div>
+      <div class="track"><i id="rankBar"></i></div>
+      <div class="statgrid" style="margin-top:11px">
+        <div><span>Per squeeze</span><b id="sPer">1</b></div>
+        <div><span>Crit odds</span><b id="sCrit">3%</b></div>
+        <div><span>This grove</span><b id="sRun">0</b></div>
+        <div><span>Best frenzy</span><b id="sBest">0</b></div>
+        <div><span>Grove bonus</span><b id="sGrove">×1.00</b></div>
+        <div><span>Replants</span><b id="sReplants">0</b></div>
+      </div>
+      <button id="replant" disabled>REPLANT THE GROVE</button>
+    </div>
+
+    <div class="shopHead">
+      <h2>PRESS ROOM</h2>
+      <div class="amtToggle" role="group" aria-label="Buy amount">
+        <button data-amt="1" aria-pressed="true">×1</button>
+        <button data-amt="10" aria-pressed="false">×10</button>
+        <button data-amt="max" aria-pressed="false">MAX</button>
+      </div>
+    </div>
+
+    <div id="cards"></div>
+  </div>
+</div>
+
+<button id="scrim" type="button" tabindex="-1" aria-label="Close press room"></button>
+<div id="banner" aria-live="polite"></div>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = id => document.getElementById(id);
+
+/* ══ formatting ══════════════════════════════════════════════ */
+const SUF = ['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc','Ud','Dd','Td'];
+function fmt(n){
+  if (!isFinite(n)) return '∞';
+  if (n < 1000) return n < 10 ? (Math.round(n*10)/10).toString() : Math.floor(n).toString();
+  let t = 0;
+  while (n >= 1000 && t < SUF.length - 1){ n /= 1000; t++; }
+  return (n < 10 ? n.toFixed(2) : n < 100 ? n.toFixed(1) : Math.floor(n).toString()) + SUF[t];
+}
+
+/* ══ fruit tiers & ranks ═════════════════════════════════════ */
+const FRUITS = [
+  { name:'Lemon',        rank:'Rind Rookie',       at:0,     hi:'#FFF0A6', a:'#FFD84D', b:'#D99400', juice:'#FFC93C', decor:'lemon'   },
+  { name:'Orange',       rank:'Pulp Hand',         at:1e3,   hi:'#FFD9A0', a:'#FFA333', b:'#D2560A', juice:'#FF9E2C', decor:'nub'     },
+  { name:'Blood Orange', rank:'Zest Sergeant',     at:2.4e4, hi:'#FFB18E', a:'#FF6A45', b:'#A5122E', juice:'#F0245F', decor:'nub'     },
+  { name:'Pomegranate',  rank:'Nectar Broker',     at:5e5,   hi:'#FF9AA8', a:'#EE3355', b:'#87102C', juice:'#E01E4F', decor:'crown'   },
+  { name:'Watermelon',   rank:'Melon Marshal',     at:1.2e7, hi:'#8FE8B6', a:'#3ABE7C', b:'#0C5A3A', juice:'#FF4D6D', decor:'stripes' },
+  { name:'Dragonfruit',  rank:'Dragon Distiller',  at:3e8,   hi:'#FFB3DC', a:'#FF5FAE', b:'#9C0B5E', juice:'#FF77C8', decor:'scales'  },
+  { name:'Cosmic Fig',   rank:'Pulp Overlord',     at:8e9,   hi:'#D4BAFF', a:'#9C5CFF', b:'#361168', juice:'#B57CFF', decor:'stars'   },
+  { name:'Ambrosia',     rank:'Ambrosia Ascendant',at:5e11,  hi:'#FFFBD6', a:'#FFDE6B', b:'#D69200', juice:'#FFE066', decor:'halo'    },
+];
+
+/* ══ upgrades ════════════════════════════════════════════════ */
+const UPGRADES = [
+  { id:'thumb',  kind:'tap',  ic:'👍', nm:'Calloused Thumb',  base:15,    r:1.14, val:1,     note:n=>`+${fmt(n)} mL per squeeze` },
+  { id:'grip',   kind:'tap',  ic:'✊', nm:'Iron Grip',         base:520,   r:1.15, val:9,     note:n=>`+${fmt(n)} mL per squeeze` },
+  { id:'zest',   kind:'tap',  ic:'🧀', nm:'Zest Grater',       base:7.4e3, r:1.15, val:62,    note:n=>`+${fmt(n)} mL per squeeze` },
+  { id:'hydro',  kind:'tap',  ic:'🦾', nm:'Hydraulic Thumb',   base:1.1e5, r:1.16, val:410,   note:n=>`+${fmt(n)} mL per squeeze` },
+  { id:'god',    kind:'tap',  ic:'🌩️', nm:'Thunder Palm',      base:9e6,   r:1.17, val:5200,  note:n=>`+${fmt(n)} mL per squeeze` },
+
+  { id:'kid',    kind:'auto', ic:'🧒', nm:'Orchard Kid',       base:110,   r:1.15, val:1,     note:n=>`+${fmt(n)} mL/sec` },
+  { id:'press',  kind:'auto', ic:'🗜️', nm:'Hand Press',        base:1.3e3, r:1.15, val:7,     note:n=>`+${fmt(n)} mL/sec` },
+  { id:'centri', kind:'auto', ic:'🌀', nm:'Centrifuge',        base:1.5e4, r:1.15, val:48,    note:n=>`+${fmt(n)} mL/sec` },
+  { id:'cannon', kind:'auto', ic:'💥', nm:'Pulp Cannon',       base:1.9e5, r:1.16, val:320,   note:n=>`+${fmt(n)} mL/sec` },
+  { id:'orbit',  kind:'auto', ic:'🛰️', nm:'Orbital Squeezer',  base:2.6e6, r:1.16, val:2200,  note:n=>`+${fmt(n)} mL/sec` },
+  { id:'grove',  kind:'auto', ic:'🌌', nm:'Grove Singularity', base:4.2e7, r:1.17, val:17000, note:n=>`+${fmt(n)} mL/sec` },
+
+  { id:'polish', kind:'crit', ic:'✨', nm:'Golden Rind Polish',base:2.5e3, r:2.35, val:0.03, max:12,
+    note:n=>`+${(n*100).toFixed(0)}% golden squeeze odds` },
+];
+
+/* ══ state ═══════════════════════════════════════════════════ */
+const S = {
+  juice:0, total:0, taps:0, run:0, crits:0, replants:0,
+  best:0, own:{}, muted:false, amt:1, seen:Date.now(),
+};
+UPGRADES.forEach(u => S.own[u.id] = 0);
+
+const SAVE_KEY = 'megasqueeze.v1';
+
+function save(){
+  S.seen = Date.now();
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch(e){}
+}
+function load(){
+  let raw; try { raw = localStorage.getItem(SAVE_KEY); } catch(e){ return 0; }
+  if (!raw) return 0;
+  let d; try { d = JSON.parse(raw); } catch(e){ return 0; }
+  for (const k of ['juice','total','taps','run','crits','replants','best']) if (typeof d[k] === 'number') S[k] = d[k];
+  if (d.own) UPGRADES.forEach(u => { if (typeof d.own[u.id] === 'number') S.own[u.id] = Math.max(0, Math.floor(d.own[u.id])); });
+  S.muted = !!d.muted;
+  const away = Math.min(Math.max(0, (Date.now() - (d.seen || Date.now())) / 1000), 7200);
+  return away;
+}
+
+/* ══ derived numbers ═════════════════════════════════════════ */
+const groveMul = () => Math.pow(1.3, S.replants);
+const rankIdx = () => { let i = 0; for (let k = 0; k < FRUITS.length; k++) if (S.total >= FRUITS[k].at) i = k; return i; };
+const rankMul = () => 1 + rankIdx() * 0.22;
+
+function perTap(){
+  let v = 1;
+  for (const u of UPGRADES) if (u.kind === 'tap') v += u.val * S.own[u.id];
+  return v * groveMul() * rankMul();
+}
+function perSec(){
+  let v = 0;
+  for (const u of UPGRADES) if (u.kind === 'auto') v += u.val * S.own[u.id];
+  return v * groveMul() * rankMul();
+}
+const critOdds = () => Math.min(0.6, 0.03 + 0.03 * S.own.polish);
+
+function costOf(u, n){
+  const owned = S.own[u.id];
+  if (u.max && owned >= u.max) return Infinity;
+  const cap = u.max ? Math.min(n, u.max - owned) : n;
+  return u.base * Math.pow(u.r, owned) * (Math.pow(u.r, cap) - 1) / (u.r - 1);
+}
+function maxAffordable(u){
+  const owned = S.own[u.id];
+  const room = u.max ? u.max - owned : 9999;
+  if (room <= 0) return 0;
+  let n = 0, spent = 0;
+  while (n < room && n < 9999){
+    const next = u.base * Math.pow(u.r, owned + n);
+    if (spent + next > S.juice) break;
+    spent += next; n++;
+  }
+  return n;
+}
+const replantNeed = () => 5e5 * Math.pow(14, S.replants);
+
+/* ══ audio ═══════════════════════════════════════════════════ */
+let AC = null, master = null, noiseBuf = null;
+function audio(){
+  if (AC) return AC;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  AC = new Ctx();
+  master = AC.createGain();
+  master.gain.value = 0.34;
+  master.connect(AC.destination);
+  const len = AC.sampleRate * 0.35;
+  noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  return AC;
+}
+function tone(freq, dur, type, vol, slideTo){
+  if (S.muted) return;
+  const ac = audio(); if (!ac) return;
+  const t = ac.currentTime;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type || 'sine';
+  o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(40, slideTo), t + dur);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(master);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+function splash(pitch, vol){
+  if (S.muted) return;
+  const ac = audio(); if (!ac || !noiseBuf) return;
+  const t = ac.currentTime;
+  const src = ac.createBufferSource(); src.buffer = noiseBuf;
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.setValueAtTime(1500 * pitch, t);
+  bp.frequency.exponentialRampToValueAtTime(280, t + 0.16);
+  bp.Q.value = 1.4;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
+  src.connect(bp); bp.connect(g); g.connect(master);
+  src.start(t); src.stop(t + 0.2);
+}
+const sfxSqueeze = combo => { splash(1 + Math.min(combo, 60) / 45, 0.16); tone(180 + Math.min(combo, 70) * 9, 0.1, 'triangle', 0.1, 90); };
+const sfxCrit = () => { [660, 880, 1180, 1560].forEach((f, i) => setTimeout(() => tone(f, 0.16, 'square', 0.075), i * 42)); splash(2.2, 0.2); };
+const sfxBuy = () => { tone(520, 0.09, 'square', 0.07); setTimeout(() => tone(780, 0.13, 'square', 0.07), 62); };
+const sfxRank = () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.5, 'triangle', 0.085), i * 78));
+const sfxReplant = () => [392, 494, 587, 784, 988].forEach((f, i) => setTimeout(() => tone(f, 0.7, 'sine', 0.1), i * 110));
+
+/* ══ canvas FX ═══════════════════════════════════════════════ */
+const cv = $('fx'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize(){
+  DPR = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  cv.width = Math.floor(W * DPR); cv.height = Math.floor(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize, { passive:true });
+resize();
+
+const drops = [], chunks = [], rings = [], floats = [], splats = [], sparks = [];
+const CAP = REDUCED ? 90 : 620;
+let shakeAmp = 0, shakeDecay = 0, zoom = 0;
+
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+function addDrop(x, y, ang, spd, r, col){
+  if (drops.length > CAP) return;
+  drops.push({ x, y, vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd, r, col, life:1, sq:0 });
+}
+function addChunk(x, y, ang, spd, r, col){
+  if (chunks.length > CAP * 0.4) return;
+  chunks.push({ x, y, vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd, r, col, rot:rnd(0,6.28), vr:rnd(-.3,.3), life:1 });
+}
+function addRing(x, y, col, big){
+  rings.push({ x, y, r:big ? 26 : 12, max:big ? 420 : 190, col, life:1, w:big ? 9 : 5 });
+}
+function addFloat(x, y, txt, col, big){
+  floats.push({ x, y, txt, col, big, vx:rnd(-.7,.7), vy:big ? -3.2 : -2.3, life:1 });
+}
+function addSplat(x, y, r, col){
+  if (splats.length > 70) splats.shift();
+  const pts = [];
+  const n = 9;
+  for (let i = 0; i < n; i++) pts.push(rnd(0.62, 1.38));
+  splats.push({ x, y, r, col, pts, life:1 });
+}
+function addSpark(x, y){
+  sparks.push({ x, y, vx:rnd(-5,5), vy:rnd(-8,-1), life:1, col:'#FFF1DC' });
+}
+function shake(a){
+  if (REDUCED) return;
+  shakeAmp = Math.min(34, Math.max(shakeAmp, a));
+  shakeDecay = 0.86;
+}
+function punch(z){ if (!REDUCED) zoom = Math.max(zoom, z); }
+function flash(a){
+  if (REDUCED) return;
+  const f = $('flash');
+  f.style.transition = 'none'; f.style.opacity = a;
+  requestAnimationFrame(() => { f.style.transition = 'opacity .34s ease-out'; f.style.opacity = 0; });
+}
+
+/* ══ the glass ═══════════════════════════════════════════════
+   Every squeeze pours into it. It fills toward the next rank,
+   gets served, and a fresh one lands on the counter.           */
+const slotEl = $('glassSlot');
+const G = { x:0, y:0, w:0, h:0, wall:4, taper:8, inL:0, inR:0, inT:0, inB:0, ok:false };
+let poolT = 0, poolTarget = 0, poolNow = 0;
+
+function measureGlass(){
+  const r = slotEl.getBoundingClientRect();
+  G.ok = r.width > 20 && r.height > 20;
+  if (!G.ok) return;
+  G.x = r.left; G.y = r.top; G.w = r.width; G.h = r.height;
+  G.wall  = Math.max(3, r.width * 0.05);
+  G.taper = r.width * 0.12;
+  G.inL = r.left + G.wall;
+  G.inR = r.left + r.width - G.wall;
+  G.inT = r.top + G.wall * 0.9;
+  G.inB = r.top + r.height - G.wall * 1.5;
+}
+const innerL = y => G.inL + G.taper * Math.max(0, Math.min(1, (y - G.inT) / (G.inB - G.inT)));
+const innerR = y => G.inR - G.taper * Math.max(0, Math.min(1, (y - G.inT) / (G.inB - G.inT)));
+
+/* 1-D spring surface — real ripples, not a sine wave */
+const NP = 26;
+const wp = new Float32Array(NP), wv = new Float32Array(NP);
+function waterStep(){
+  const k = 0.030, damp = 0.019, spread = 0.13;
+  for (let i = 0; i < NP; i++){ wv[i] += -k * wp[i] - wv[i] * damp; wp[i] += wv[i]; }
+  for (let pass = 0; pass < 2; pass++){
+    for (let i = 0; i < NP; i++){
+      if (i > 0)      wv[i - 1] += spread * (wp[i] - wp[i - 1]);
+      if (i < NP - 1) wv[i + 1] += spread * (wp[i] - wp[i + 1]);
+    }
+  }
+}
+function splashAt(x, amp){
+  const t = (x - G.inL) / Math.max(1, G.inR - G.inL);
+  const i = Math.max(0, Math.min(NP - 1, Math.round(t * (NP - 1))));
+  wp[i] += amp;
+  if (i > 0) wp[i - 1] += amp * 0.5;
+  if (i < NP - 1) wp[i + 1] += amp * 0.5;
+}
+const restY = () => G.inB - poolNow * (G.inB - G.inT);
+function surfaceY(x){
+  const t = Math.max(0, Math.min(1, (x - G.inL) / Math.max(1, G.inR - G.inL)));
+  const f = t * (NP - 1), i = Math.floor(f), m = f - i;
+  const a = wp[i] || 0, b = wp[Math.min(NP - 1, i + 1)] || 0;
+  return restY() + (a + (b - a) * m);
+}
+
+/* ballistic pour: solved so the drop lands in the glass mouth */
+function addPour(x, y, col, r){
+  if (!G.ok || drops.length > CAP) return;
+  const tx = (G.inL + G.inR) / 2 + rnd(-G.w * 0.16, G.w * 0.16);
+  const ty = Math.min(restY() - 6, G.inB - 6);
+  const t = rnd(0.42, 0.62);
+  const g = 1750;
+  drops.push({
+    x, y, r, col, life:1, into:true,
+    vx:(tx - x) / t,
+    vy:(ty - y - 0.5 * g * t * t) / t,
+  });
+}
+
+const bubs = [];
+function drawGlassBack(){
+  if (!G.ok) return;
+  const f = FRUITS[rankIdx()];
+
+  ctx.save();
+  /* counter shadow */
+  ctx.globalAlpha = .35; ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(G.x + G.w / 2, G.y + G.h + 3, G.w * 0.44, G.w * 0.09, 0, 0, 6.2832);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  /* inner cavity */
+  ctx.beginPath();
+  ctx.moveTo(G.inL, G.inT);
+  ctx.lineTo(innerL(G.inB), G.inB);
+  ctx.quadraticCurveTo((G.inL + G.inR) / 2, G.inB + G.wall * 1.5, innerR(G.inB), G.inB);
+  ctx.lineTo(G.inR, G.inT);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,241,220,.05)';
+  ctx.fill();
+
+  /* liquid */
+  if (poolNow > 0.004){
+    ctx.save();
+    ctx.clip();
+    const top = restY();
+
+    ctx.beginPath();
+    ctx.moveTo(G.inL - 4, G.inB + 30);
+    for (let i = 0; i < NP; i++){
+      const x = G.inL + (G.inR - G.inL) * (i / (NP - 1));
+      ctx.lineTo(x, top + wp[i]);
+    }
+    ctx.lineTo(G.inR + 4, G.inB + 30);
+    ctx.closePath();
+    ctx.fillStyle = f.juice;
+    ctx.globalAlpha = .85;
+    ctx.fill();
+
+    /* denser at the base */
+    ctx.globalAlpha = .3; ctx.fillStyle = f.b;
+    ctx.fillRect(G.inL - 4, G.inB - G.h * 0.16, G.w, G.h);
+
+    /* meniscus */
+    ctx.globalAlpha = .95;
+    ctx.strokeStyle = f.hi; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i < NP; i++){
+      const x = G.inL + (G.inR - G.inL) * (i / (NP - 1));
+      i === 0 ? ctx.moveTo(x, top + wp[i]) : ctx.lineTo(x, top + wp[i]);
+    }
+    ctx.stroke();
+
+    /* bubbles */
+    ctx.globalAlpha = .5; ctx.fillStyle = f.hi;
+    for (const b of bubs){
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 6.2832); ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawGlassFront(){
+  if (!G.ok) return;
+  const L = G.x, R = G.x + G.w, T = G.y, B = G.y + G.h;
+  ctx.save();
+
+  /* walls */
+  ctx.strokeStyle = 'rgba(255,241,220,.34)';
+  ctx.lineWidth = G.wall * 0.9;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(L, T);
+  ctx.lineTo(L + G.taper, B - G.wall);
+  ctx.quadraticCurveTo(G.x + G.w / 2, B + G.wall * 1.1, R - G.taper, B - G.wall);
+  ctx.lineTo(R, T);
+  ctx.stroke();
+
+  /* rim */
+  ctx.lineWidth = G.wall * 0.75;
+  ctx.strokeStyle = 'rgba(255,241,220,.6)';
+  ctx.beginPath();
+  ctx.ellipse((L + R) / 2, T, (R - L) / 2, G.w * 0.085, 0, 0, 6.2832);
+  ctx.stroke();
+
+  /* speculars */
+  ctx.globalAlpha = .3 + heat * 0.45;
+  ctx.strokeStyle = '#FFF1DC';
+  ctx.lineWidth = Math.max(2, G.w * 0.055);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(L + G.w * 0.17, T + G.h * 0.14);
+  ctx.lineTo(L + G.w * 0.13 + G.taper * 0.6, B - G.h * 0.16);
+  ctx.stroke();
+  ctx.globalAlpha = .14;
+  ctx.lineWidth = Math.max(1.5, G.w * 0.03);
+  ctx.beginPath();
+  ctx.moveTo(R - G.w * 0.14, T + G.h * 0.2);
+  ctx.lineTo(R - G.w * 0.12 - G.taper * 0.5, B - G.h * 0.2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function draw(dt){
+  ctx.clearRect(0, 0, W, H);
+  const f = FRUITS[rankIdx()];
+
+  measureGlass();
+  poolNow += (poolTarget - poolNow) * Math.min(1, dt * 2.2);
+  poolT += dt;
+  waterStep();
+
+  /* bubbles rise while there's juice */
+  if (G.ok && poolNow > 0.06 && !REDUCED){
+    if (Math.random() < dt * 9 && bubs.length < 22){
+      const y = G.inB - rnd(0, 6);
+      bubs.push({ x:rnd(innerL(y) + 4, innerR(y) - 4), y, r:rnd(1.2, 3.2), vy:rnd(16, 44) });
+    }
+    for (let i = bubs.length - 1; i >= 0; i--){
+      const b = bubs[i];
+      b.y -= b.vy * dt;
+      b.x += Math.sin(b.y * 0.09) * 0.3;
+      if (b.y < surfaceY(b.x) + 2){ splashAt(b.x, 0.5); bubs.splice(i, 1); }
+    }
+  } else if (bubs.length) bubs.length = 0;
+
+  /* lifetime spill — the mess never gets cleaned up */
+  const puddleH = Math.min(28, Math.log10(S.taps + 1) * 6.4);
+  if (puddleH > 1){
+    const top = H - puddleH;
+    ctx.save();
+    ctx.globalAlpha = .28; ctx.fillStyle = f.juice;
+    ctx.beginPath();
+    ctx.moveTo(0, H + 4); ctx.lineTo(0, top);
+    const step = Math.max(16, W / 40);
+    for (let x = 0; x <= W + step; x += step){
+      ctx.lineTo(x, top + Math.sin(x * 0.012 + poolT * 1.1) * 3.5 + Math.sin(x * 0.03 - poolT * 1.9) * 1.8);
+    }
+    ctx.lineTo(W + 4, H + 4); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = .6; ctx.strokeStyle = f.juice; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let x = 0; x <= W + step; x += step){
+      const y = top + Math.sin(x * 0.012 + poolT * 1.1) * 3.5 + Math.sin(x * 0.03 - poolT * 1.9) * 1.8;
+      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* sticky splats */
+  for (let i = splats.length - 1; i >= 0; i--){
+    const s = splats[i];
+    s.life -= dt * 0.13;
+    if (s.life <= 0){ splats.splice(i, 1); continue; }
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.4, s.life * 0.4);
+    ctx.fillStyle = s.col;
+    ctx.beginPath();
+    const n = s.pts.length;
+    for (let k = 0; k <= n; k++){
+      const a = (k % n) / n * Math.PI * 2;
+      const rr = s.r * s.pts[k % n];
+      const x = s.x + Math.cos(a) * rr, y = s.y + Math.sin(a) * rr * 0.8;
+      k === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  drawGlassBack();
+
+  /* shaken layer */
+  const sx = shakeAmp ? rnd(-shakeAmp, shakeAmp) : 0;
+  const sy = shakeAmp ? rnd(-shakeAmp, shakeAmp) : 0;
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  /* rings */
+  for (let i = rings.length - 1; i >= 0; i--){
+    const g = rings[i];
+    g.life -= dt * 1.9;
+    g.r += (g.max - g.r) * Math.min(1, dt * 7);
+    if (g.life <= 0){ rings.splice(i, 1); continue; }
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, g.life) * 0.6;
+    ctx.strokeStyle = g.col;
+    ctx.lineWidth = g.w * g.life;
+    ctx.beginPath(); ctx.arc(g.x, g.y, g.r, 0, 6.2832); ctx.stroke();
+    ctx.restore();
+  }
+
+  /* chunks (pulp) */
+  for (let i = chunks.length - 1; i >= 0; i--){
+    const c = chunks[i];
+    c.vy += 1500 * dt; c.vx *= 0.995;
+    c.x += c.vx * dt; c.y += c.vy * dt; c.rot += c.vr;
+    c.life -= dt * 0.5;
+    if (c.life <= 0 || c.y > H + 60){ chunks.splice(i, 1); continue; }
+    ctx.save();
+    ctx.translate(c.x, c.y); ctx.rotate(c.rot);
+    ctx.globalAlpha = Math.min(1, c.life * 1.6);
+    ctx.fillStyle = c.col;
+    ctx.beginPath();
+    ctx.moveTo(-c.r, -c.r * 0.7); ctx.lineTo(c.r * 0.9, -c.r);
+    ctx.lineTo(c.r, c.r * 0.8);   ctx.lineTo(-c.r * 0.6, c.r);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  /* droplets */
+  const floor = H - Math.min(28, Math.log10(S.taps + 1) * 6.4);
+  for (let i = drops.length - 1; i >= 0; i--){
+    const d = drops[i];
+    d.vy += 1750 * dt;
+    d.x += d.vx * dt; d.y += d.vy * dt;
+    d.life -= dt * (d.into ? 0.2 : 0.42);
+
+    /* a poured drop lands in the glass */
+    if (d.into && G.ok && d.vy > 0 && d.y >= surfaceY(d.x) && d.x > innerL(d.y) && d.x < innerR(d.y)){
+      splashAt(d.x, Math.min(7, 1.6 + d.r * 0.5));
+      for (let k = 0; k < 2; k++)
+        addDrop(d.x, d.y, rnd(-2.5, -0.7), rnd(40, 150), d.r * 0.45, d.col);
+      drops.splice(i, 1); continue;
+    }
+
+    if (d.y > floor && d.vy > 0){
+      if (Math.abs(d.vy) > 140 && d.r > 2.4){
+        addSplat(d.x, floor + rnd(-4, 6), d.r * rnd(1.6, 3), d.col);
+        d.vy *= -0.28; d.vx *= 0.5; d.life -= 0.34;
+      } else { drops.splice(i, 1); continue; }
+    }
+    if (d.life <= 0 || d.x < -40 || d.x > W + 40){ drops.splice(i, 1); continue; }
+    const sp = Math.min(1, Math.hypot(d.vx, d.vy) / 900);
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, d.life * 1.5);
+    ctx.fillStyle = d.col;
+    ctx.translate(d.x, d.y);
+    ctx.rotate(Math.atan2(d.vy, d.vx));
+    ctx.beginPath();
+    ctx.ellipse(0, 0, d.r * (1 + sp * 1.5), d.r * (1 - sp * 0.35), 0, 0, 6.2832);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /* sparks (crit) */
+  for (let i = sparks.length - 1; i >= 0; i--){
+    const s = sparks[i];
+    s.vy += 460 * dt; s.x += s.vx; s.y += s.vy * dt * 6;
+    s.life -= dt * 1.5;
+    if (s.life <= 0){ sparks.splice(i, 1); continue; }
+    ctx.save();
+    ctx.globalAlpha = s.life;
+    ctx.fillStyle = s.col;
+    ctx.fillRect(s.x, s.y, 3, 3 + s.life * 9);
+    ctx.restore();
+  }
+
+  /* floating numbers */
+  for (let i = floats.length - 1; i >= 0; i--){
+    const f = floats[i];
+    f.vy += 42 * dt; f.x += f.vx; f.y += f.vy;
+    f.life -= dt * 0.85;
+    if (f.life <= 0){ floats.splice(i, 1); continue; }
+    const pop = f.life > 0.86 ? 1 + (f.life - 0.86) * 4 : 1;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, f.life * 1.7);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.translate(f.x, f.y); ctx.scale(pop, pop);
+    if (f.big){
+      ctx.font = '700 30px Bungee, Arial Black, sans-serif';
+      ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(26,11,22,.75)';
+      ctx.strokeText(f.txt, 0, 0);
+    } else {
+      ctx.font = '700 19px "IBM Plex Mono", monospace';
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(26,11,22,.6)';
+      ctx.strokeText(f.txt, 0, 0);
+    }
+    ctx.fillStyle = f.col;
+    ctx.fillText(f.txt, 0, 0);
+    ctx.restore();
+  }
+
+  ctx.restore();
+
+  drawGlassFront();
+
+  if (shakeAmp){
+    shakeAmp *= shakeDecay;
+    if (shakeAmp < 0.4) shakeAmp = 0;
+  }
+}
+
+/* ══ fruit rendering ═════════════════════════════════════════ */
+const fruitEl = $('fruit');
+function fruitSVG(f, i){
+  const seg = [];
+  if (f.decor === 'lemon'){
+    for (let k = 0; k < 7; k++){
+      const a = k / 7 * 360;
+      seg.push(`<ellipse cx="100" cy="100" rx="7" ry="46" fill="${f.hi}" opacity=".2" transform="rotate(${a} 100 100)"/>`);
+    }
+  }
+  if (f.decor === 'nub'){
+    for (let k = 0; k < 34; k++){
+      const a = rnd(0, 6.2832), rr = Math.sqrt(Math.random()) * 68;
+      seg.push(`<circle cx="${(100 + Math.cos(a) * rr).toFixed(1)}" cy="${(100 + Math.sin(a) * rr).toFixed(1)}" r="${rnd(1.4, 3.4).toFixed(1)}" fill="${f.b}" opacity=".3"/>`);
+    }
+  }
+  if (f.decor === 'crown'){
+    seg.push(`<path d="M100 18 l9 16 12-10 -2 18 16-4 -9 15" fill="${f.b}" opacity=".9"/>`);
+    for (let k = 0; k < 22; k++){
+      const a = rnd(0, 6.2832), rr = Math.sqrt(Math.random()) * 58;
+      seg.push(`<circle cx="${(100 + Math.cos(a) * rr).toFixed(1)}" cy="${(104 + Math.sin(a) * rr).toFixed(1)}" r="${rnd(3, 6).toFixed(1)}" fill="${f.juice}" opacity=".55"/>`);
+    }
+  }
+  if (f.decor === 'stripes'){
+    for (let k = -3; k <= 3; k++){
+      seg.push(`<path d="M${100 + k * 22} 12 q ${k * 9} 88 0 176" stroke="${f.b}" stroke-width="9" fill="none" opacity=".8" stroke-linecap="round"/>`);
+    }
+  }
+  if (f.decor === 'scales'){
+    for (let k = 0; k < 12; k++){
+      const a = k / 12 * 360;
+      seg.push(`<path d="M100 34 q 16 12 0 30 q -16 -18 0 -30z" fill="${f.hi}" opacity=".55" transform="rotate(${a} 100 100)"/>`);
+    }
+  }
+  if (f.decor === 'stars'){
+    for (let k = 0; k < 26; k++){
+      const a = rnd(0, 6.2832), rr = Math.sqrt(Math.random()) * 70;
+      seg.push(`<circle cx="${(100 + Math.cos(a) * rr).toFixed(1)}" cy="${(100 + Math.sin(a) * rr).toFixed(1)}" r="${rnd(.8, 2.6).toFixed(1)}" fill="#FFF1DC" opacity="${rnd(.35, .95).toFixed(2)}"/>`);
+    }
+  }
+  if (f.decor === 'halo'){
+    seg.push(`<circle cx="100" cy="100" r="94" fill="none" stroke="${f.hi}" stroke-width="2" opacity=".6" stroke-dasharray="5 9"/>`);
+    for (let k = 0; k < 16; k++){
+      const a = k / 16 * 360;
+      seg.push(`<path d="M100 4 l4 14 -8 0z" fill="${f.hi}" opacity=".7" transform="rotate(${a} 100 100)"/>`);
+    }
+  }
+  return `<svg viewBox="0 0 200 200" aria-hidden="true">
+    <defs>
+      <radialGradient id="gd${i}" cx="34%" cy="28%" r="82%">
+        <stop offset="0%" stop-color="${f.hi}"/>
+        <stop offset="52%" stop-color="${f.a}"/>
+        <stop offset="100%" stop-color="${f.b}"/>
+      </radialGradient>
+    </defs>
+    <ellipse cx="100" cy="182" rx="60" ry="9" fill="#000" opacity=".28"/>
+    <circle cx="100" cy="100" r="84" fill="url(#gd${i})" stroke="${f.b}" stroke-width="3"/>
+    <g>${seg.join('')}</g>
+    <ellipse cx="72" cy="66" rx="26" ry="18" fill="#FFF1DC" opacity=".38" transform="rotate(-28 72 66)"/>
+    <ellipse cx="128" cy="140" rx="30" ry="14" fill="${f.b}" opacity=".22" transform="rotate(-24 128 140)"/>
+    <path d="M100 20 q 4 -14 -2 -20 q 12 1 15 9 q 14 -12 30 -8 q -8 18 -30 20 z" fill="#2FD08A"/>
+    <path d="M99 21 q -18 -10 -34 -4 q 8 14 32 12z" fill="#1E9E6A"/>
+  </svg>`;
+}
+
+let shownFruit = -1;
+function setFruit(i){
+  if (i === shownFruit) return;
+  shownFruit = i;
+  fruitEl.innerHTML = fruitSVG(FRUITS[i], i);
+  document.documentElement.style.setProperty('--juice', FRUITS[i].juice);
+}
+
+/* jelly physics */
+const J = { sx:1, sy:1, vsx:0, vsy:0, ox:0, oy:0, vox:0, voy:0, rot:0, vrot:0, t:0 };
+function jelly(dt){
+  J.t += dt;
+  const k = 190, damp = 14;
+  J.vsx += (1 - J.sx) * k * dt; J.vsx -= J.vsx * damp * dt; J.sx += J.vsx * dt;
+  J.vsy += (1 - J.sy) * k * dt; J.vsy -= J.vsy * damp * dt; J.sy += J.vsy * dt;
+  J.vox += (0 - J.ox) * 150 * dt; J.vox -= J.vox * 13 * dt; J.ox += J.vox * dt;
+  J.voy += (0 - J.oy) * 150 * dt; J.voy -= J.voy * 13 * dt; J.oy += J.voy * dt;
+  J.vrot += (0 - J.rot) * 110 * dt; J.vrot -= J.vrot * 11 * dt; J.rot += J.vrot * dt;
+  const br = REDUCED ? 0 : Math.sin(J.t * 1.7) * 0.011;
+  const z = 1 + zoom;
+  fruitEl.style.transform =
+    `translate(${J.ox.toFixed(2)}px,${J.oy.toFixed(2)}px) scale(${((J.sx + br) * z).toFixed(4)},${((J.sy - br) * z).toFixed(4)}) rotate(${(J.rot * 12).toFixed(2)}deg)`;
+  zoom *= 0.86; if (zoom < 0.001) zoom = 0;
+}
+
+/* ══ combo / frenzy ══════════════════════════════════════════ */
+let combo = 0, lastTap = 0, heat = 0;
+const badge = $('comboBadge');
+const TIERS = [[100, 8], [50, 5], [25, 3], [10, 2]];
+function comboMul(){
+  for (const [c, m] of TIERS) if (combo >= c) return m;
+  return 1;
+}
+function comboStep(dt){
+  const gap = performance.now() - lastTap;
+  if (gap > 1100) combo = Math.max(0, combo - dt * 26);
+  heat += (Math.min(1, combo / 100) - heat) * Math.min(1, dt * 5);
+  document.documentElement.style.setProperty('--heat', heat.toFixed(3));
+  const m = comboMul();
+  if (m > 1){
+    badge.textContent = `×${m}  FRENZY`;
+    badge.classList.add('on');
+  } else badge.classList.remove('on');
+}
+
+/* ══ the squeeze ═════════════════════════════════════════════ */
+let announcedRank = -1, tapMilestone = 0;
+
+function squeeze(cx, cy, fromCenter){
+  const now = performance.now();
+  combo = (now - lastTap < 1100) ? Math.min(999, combo + 1) : 1;
+  lastTap = now;
+
+  const f = FRUITS[rankIdx()];
+  const crit = Math.random() < critOdds();
+  const mul = comboMul() * (crit ? 10 : 1);
+  const gain = perTap() * mul;
+
+  S.juice += gain; S.total += gain; S.taps++; S.run++;
+  lifePop = 0.2;
+  if (crit) S.crits++;
+
+  const r = fruitEl.getBoundingClientRect();
+  const fx = r.left + r.width / 2, fy = r.top + r.height / 2;
+  const px = fromCenter ? fx : cx, py = fromCenter ? fy : cy;
+
+  /* poke the jelly away from the finger */
+  const dx = (fx - px) / (r.width / 2 || 1), dy = (fy - py) / (r.height / 2 || 1);
+  J.vsy -= 5.4 + Math.min(3, combo * 0.05);
+  J.vsx += 4.2 + Math.min(2.6, combo * 0.04);
+  J.vox += dx * 46; J.voy += dy * 46;
+  J.vrot += rnd(-0.9, 0.9);
+
+  /* juice jet away from the press point */
+  const base = Math.atan2(py - fy, px - fx);
+  const n = crit ? 46 : Math.min(26, 8 + Math.floor(combo / 6));
+  for (let i = 0; i < n; i++){
+    const a = base + rnd(-1.15, 1.15);
+    const spd = rnd(240, 780) * (crit ? 1.5 : 1);
+    addDrop(px + rnd(-8, 8), py + rnd(-8, 8), a, spd, rnd(2.2, crit ? 8 : 6), f.juice);
+  }
+  for (let i = 0; i < (crit ? 14 : 5); i++){
+    addChunk(px, py, base + rnd(-1.6, 1.6), rnd(180, 560), rnd(3, 8), i % 3 ? f.a : f.hi);
+  }
+  /* and a measured pour that actually lands in the glass */
+  for (let i = 0; i < (crit ? 8 : 3); i++)
+    addPour(px + rnd(-10, 10), py + rnd(-10, 10), f.juice, rnd(3, crit ? 7.5 : 5.5));
+
+  addRing(px, py, crit ? '#FFF1DC' : f.juice, crit);
+  addFloat(px, py - 24, (crit ? '★ ' : '+') + fmt(gain), crit ? '#FFF1DC' : f.juice, crit || mul > 2);
+
+  if (crit){
+    for (let i = 0; i < 26; i++) addSpark(px + rnd(-40, 40), py + rnd(-30, 30));
+    shake(22); punch(0.16); flash(0.5); sfxCrit();
+    addFloat(fx, fy - r.height * 0.55, 'GOLDEN SQUEEZE', '#FFC93C', true);
+    if (navigator.vibrate) navigator.vibrate([12, 22, 12]);
+    if (S.crits === 1) toast('✨', 'First golden squeeze', 'That was a ×10.');
+  } else {
+    shake(4 + Math.min(11, combo * 0.22));
+    punch(0.035 + Math.min(0.05, combo * 0.0012));
+    sfxSqueeze(combo);
+    if (navigator.vibrate && combo % 4 === 0) navigator.vibrate(8);
+  }
+
+  if (combo === 10 || combo === 25 || combo === 50 || combo === 100){
+    flash(0.28); shake(16);
+    toast('🔥', `Frenzy ×${comboMul()}`, `${combo} squeezes without a break`);
+  }
+  if (combo > S.best) S.best = combo;
+
+  const tm = [100, 1000, 10000, 100000].find(v => S.taps === v);
+  if (tm && tm > tapMilestone){ tapMilestone = tm; toast('💪', `${fmt(tm)} squeezes`, 'Your thumb is a legend'); }
+}
+
+/* ══ ranks & prestige ════════════════════════════════════════ */
+function checkRank(){
+  const i = rankIdx();
+  if (i === announcedRank) return;
+  const first = announcedRank === -1;
+  announcedRank = i;
+  setFruit(i);
+  if (first) return;
+  const f = FRUITS[i];
+  banner('RANK UP', f.rank);
+  sfxRank(); flash(0.7); shake(26); punch(0.2);
+  const r = fruitEl.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  for (let k = 0; k < 90; k++){
+    addChunk(cx, cy, rnd(0, 6.2832), rnd(200, 900), rnd(3, 10), k % 2 ? f.a : f.hi);
+    addDrop(cx, cy, rnd(0, 6.2832), rnd(300, 1000), rnd(2, 7), f.juice);
+  }
+  addRing(cx, cy, '#FFF1DC', true);
+  if (G.ok){
+    splashAt((G.inL + G.inR) / 2, 10);
+    addFloat(G.x + G.w / 2, G.y - 12, 'SERVED!', '#FFF1DC', true);
+  }
+  toast('🏆', f.rank, `Now pressing ${f.name.toLowerCase()} · +22% output`);
+}
+
+function replant(){
+  if (S.total < replantNeed()) return;
+  S.replants++;
+  S.juice = 0; S.total = 0; S.run = 0;   /* S.taps is lifetime — it survives */
+  UPGRADES.forEach(u => S.own[u.id] = 0);
+  announcedRank = -1;
+  poolNow = 0; poolTarget = 0;
+  combo = 0; heat = 0;
+  banner('REPLANTED', `GROVE ×${groveMul().toFixed(2)}`);
+  sfxReplant(); flash(0.85); shake(30);
+  for (let k = 0; k < 140; k++){
+    addChunk(rnd(0, W), H, rnd(-2.6, -0.5), rnd(500, 1300), rnd(3, 9), k % 2 ? '#2FD08A' : '#FFC93C');
+  }
+  toast('🌱', `Replant ${S.replants}`, `Every squeeze is now ×${groveMul().toFixed(2)} forever`);
+  toast('🔢', 'Squeezes kept', `${S.taps.toLocaleString('en-US')} lifetime squeezes carried over`);
+  render(true); save();
+}
+
+/* ══ banners & toasts ════════════════════════════════════════ */
+const bannerHost = $('banner');
+function banner(kicker, big){
+  bannerHost.innerHTML = `<div class="slab"><span class="kicker">${kicker}</span><span class="big">${big}</span></div>`;
+  const el = bannerHost.firstElementChild;
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => { if (bannerHost.firstElementChild === el) bannerHost.innerHTML = ''; }, 1400);
+}
+const toastHost = $('toasts');
+function toast(ic, title, sub){
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<span class="tic">${ic}</span><span><small>${title}</small>${sub}</span>`;
+  toastHost.append(el);
+  while (toastHost.children.length > 4) toastHost.firstElementChild.remove();
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 320); }, 3400);
+}
+
+/* ══ shop DOM ════════════════════════════════════════════════ */
+const cardHost = $('cards');
+const refs = {};
+for (const u of UPGRADES){
+  const el = document.createElement('button');
+  el.className = 'card';
+  el.type = 'button';
+  el.innerHTML =
+    `<span class="best">BEST VALUE</span>` +
+    `<span class="ic">${u.ic}</span>` +
+    `<span class="txt"><span class="nm">${u.nm}</span><span class="ef"></span></span>` +
+    `<span class="rt"><span class="cost">—</span><span class="lvl">LV 0</span></span>`;
+  el.addEventListener('click', () => buy(u, el));
+  cardHost.append(el);
+  refs[u.id] = { el, ef:el.querySelector('.ef'), cost:el.querySelector('.cost'), lvl:el.querySelector('.lvl') };
+}
+
+function buy(u, el){
+  let n = S.amt === 'max' ? maxAffordable(u) : S.amt;
+  if (u.max) n = Math.min(n, u.max - S.own[u.id]);
+  if (n <= 0) return;
+  let c = costOf(u, n);
+  while (n > 1 && c > S.juice){ n--; c = costOf(u, n); }
+  if (n <= 0 || c > S.juice) return;
+
+  S.juice -= c; S.own[u.id] += n;
+  sfxBuy(); punch(0.05); shake(5);
+  el.classList.remove('bought'); void el.offsetWidth; el.classList.add('bought');
+
+  const r = el.getBoundingClientRect();
+  const f = FRUITS[rankIdx()];
+  for (let i = 0; i < 16; i++){
+    addChunk(r.left + rnd(0, r.width), r.top + r.height / 2, rnd(-3.4, -0.2), rnd(160, 520), rnd(2.5, 6), i % 2 ? f.a : '#FFF1DC');
+  }
+  addFloat(r.left + r.width * 0.5, r.top, `−${fmt(c)}`, '#C9A9B8', false);
+  render(true); save();
+}
+
+document.querySelectorAll('.amtToggle button').forEach(b => {
+  b.addEventListener('click', () => {
+    S.amt = b.dataset.amt === 'max' ? 'max' : Number(b.dataset.amt);
+    document.querySelectorAll('.amtToggle button').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    render(true); sfxBuy();
+  });
+});
+
+/* ══ HUD render ══════════════════════════════════════════════ */
+const elJuice = $('juiceNum'), elJps = $('jps'), elRankChip = $('rankChip').querySelector('b');
+const elRankNext = $('rankNext'), elRankBar = $('rankBar'), elReplant = $('replant');
+const elPer = $('sPer'), elCrit = $('sCrit'), elRun = $('sRun');
+const elBest = $('sBest'), elGrove = $('sGrove'), elReplants = $('sReplants');
+const elLife = $('lifeNum'), elGlassCap = $('glassCap'), badgeEl = $('handleBadge');
+let shownJuice = 0, lifePop = 0, shownLife = -1;
+
+function render(force){
+  const i = rankIdx(), f = FRUITS[i];
+  elJuice.textContent = fmt(shownJuice);
+  elJps.textContent = `+${fmt(perSec())} mL/s`;
+  elRankChip.textContent = f.rank;
+  if (S.taps !== shownLife){ shownLife = S.taps; elLife.textContent = S.taps.toLocaleString('en-US'); }
+
+  const lo = f.at, hi = i + 1 < FRUITS.length ? FRUITS[i + 1].at : f.at * 12;
+  const p = Math.max(0, Math.min(1, (S.total - lo) / (hi - lo)));
+  poolTarget = p;
+  elRankBar.style.width = (p * 100).toFixed(1) + '%';
+  elRankNext.textContent = i + 1 < FRUITS.length ? fmt(hi) + ' mL' : 'MAX RANK';
+
+  elPer.textContent = fmt(perTap());
+  elCrit.textContent = (critOdds() * 100).toFixed(0) + '%';
+  elRun.textContent = S.run.toLocaleString('en-US');
+  elBest.textContent = Math.floor(S.best) + '×';
+  elGrove.textContent = '×' + groveMul().toFixed(2);
+  elReplants.textContent = S.replants;
+
+  elGlassCap.innerHTML = i + 1 < FRUITS.length
+    ? `fills to <b>${FRUITS[i + 1].rank}</b>`
+    : `<b>the last glass</b>`;
+
+  /* best value in the room — so you're not just buying whatever */
+  let bestId = null, bestWorth = 0, ready = 0;
+  for (const u of UPGRADES){
+    const maxedU = u.max && S.own[u.id] >= u.max;
+    const c1 = costOf(u, 1);
+    if (!maxedU && c1 <= S.juice) ready++;
+    if (u.kind === 'crit' || maxedU) continue;
+    const worth = (u.kind === 'auto' ? u.val : u.val * 4) / c1;
+    if (worth > bestWorth){ bestWorth = worth; bestId = u.id; }
+  }
+  badgeEl.textContent = ready ? `${ready} ready` : 'keep squeezing';
+  badgeEl.classList.toggle('hot', ready > 0);
+
+  const need = replantNeed(), ok = S.total >= need;
+  elReplant.disabled = !ok;
+  elReplant.textContent = ok
+    ? `REPLANT · GROVE ×${(groveMul() * 1.3).toFixed(2)}`
+    : `REPLANT AT ${fmt(need)} mL`;
+
+  for (const u of UPGRADES){
+    const R = refs[u.id], owned = S.own[u.id];
+    const maxed = u.max && owned >= u.max;
+    let n = S.amt === 'max' ? Math.max(1, maxAffordable(u)) : S.amt;
+    if (u.max) n = Math.min(n, Math.max(1, u.max - owned));
+    const c = costOf(u, n);
+    const afford = !maxed && c <= S.juice;
+
+    R.el.classList.toggle('afford', !!afford);
+    R.el.classList.toggle('maxed', !!maxed);
+    R.el.classList.toggle('bestbuy', u.id === bestId);
+    R.cost.textContent = maxed ? 'MAXED' : fmt(c) + (n > 1 ? ` ·${n}` : '');
+    R.lvl.textContent = 'LV ' + owned + (u.max ? '/' + u.max : '');
+    const eff = u.kind === 'crit' ? u.val * n : u.val * n * groveMul() * rankMul();
+    R.ef.textContent = u.note(eff);
+  }
+}
+
+/* ══ input ═══════════════════════════════════════════════════ */
+const arenaEl = $('arena');
+const shopEl = $('shop'), handleEl = $('handle'), scrimEl = $('scrim');
+const shopOpen = () => shopEl.classList.contains('open');
+
+/* the whole stage is the button — forgiving for thumbs, and every
+   finger counts, so two-thumb mashing works */
+arenaEl.addEventListener('pointerdown', e => {
+  if (shopOpen()) return;
+  e.preventDefault();
+  audio();
+  squeeze(e.clientX, e.clientY, false);
+}, { passive:false });
+
+/* keyboard / assistive activation of the fruit button (detail 0 = not a pointer) */
+fruitEl.addEventListener('click', e => {
+  if (e.detail === 0){ audio(); squeeze(0, 0, true); }
+});
+
+/* ─ press-room drawer (small screens) ─ */
+function setShop(open){
+  shopEl.classList.toggle('open', open);
+  scrimEl.classList.toggle('on', open);
+  handleEl.setAttribute('aria-expanded', String(open));
+  if (navigator.vibrate) navigator.vibrate(6);
+}
+let dragY = null, swiped = false;
+handleEl.addEventListener('pointerdown', e => { dragY = e.clientY; swiped = false; });
+handleEl.addEventListener('pointerup', e => {
+  if (dragY === null) return;
+  const d = e.clientY - dragY; dragY = null;
+  if (Math.abs(d) > 22){ swiped = true; setShop(d < 0); }
+});
+handleEl.addEventListener('click', () => {
+  if (swiped){ swiped = false; return; }
+  setShop(!shopOpen());
+});
+scrimEl.addEventListener('click', () => setShop(false));
+addEventListener('keydown', e => { if (e.key === 'Escape' && shopOpen()) setShop(false); });
+
+/* no pinch, no double-tap zoom, no accidental text selection */
+addEventListener('gesturestart', e => e.preventDefault());
+addEventListener('dblclick', e => e.preventDefault());
+addEventListener('contextmenu', e => { if (e.target.closest('#arena')) e.preventDefault(); });
+addEventListener('keydown', e => {
+  if ((e.key === ' ' || e.code === 'Space') && document.activeElement !== fruitEl && !/^(BUTTON|INPUT)$/.test(document.activeElement.tagName)){
+    e.preventDefault(); audio(); squeeze(0, 0, true);
+  }
+});
+$('mute').addEventListener('click', e => {
+  S.muted = !S.muted;
+  e.currentTarget.setAttribute('aria-pressed', String(S.muted));
+  e.currentTarget.textContent = S.muted ? '🔇' : '🔊';
+  if (!S.muted){ audio(); sfxBuy(); }
+  save();
+});
+elReplant.addEventListener('click', replant);
+
+/* ══ loop ════════════════════════════════════════════════════ */
+const away = load();
+$('mute').setAttribute('aria-pressed', String(S.muted));
+$('mute').textContent = S.muted ? '🔇' : '🔊';
+setFruit(rankIdx());
+announcedRank = rankIdx();
+
+if (away > 8){
+  const owed = perSec() * away;
+  if (owed > 0){
+    S.juice += owed; S.total += owed;
+    const mins = Math.round(away / 60);
+    setTimeout(() => toast('🕰️', 'While you were out', `The presses made ${fmt(owed)} mL in ${mins < 1 ? 'under a minute' : mins + ' min'}`), 600);
+  }
+}
+shownJuice = S.juice;
+render(true);
+
+let last = performance.now(), acc = 0, hudAcc = 0;
+function frame(now){
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  /* passive income + drip visuals */
+  const jps = perSec();
+  if (jps > 0){
+    S.juice += jps * dt; S.total += jps * dt;
+    acc += dt;
+    if (acc > 0.17 && !REDUCED){
+      acc = 0;
+      /* the presses keep dripping into the glass while you rest */
+      const r = fruitEl.getBoundingClientRect();
+      addPour(
+        r.left + r.width / 2 + rnd(-r.width * 0.3, r.width * 0.3),
+        r.top + r.height * 0.92,
+        FRUITS[rankIdx()].juice, rnd(2.2, 4)
+      );
+    }
+  }
+
+  /* counter rolls toward the true value */
+  shownJuice += (S.juice - shownJuice) * Math.min(1, dt * 9);
+  if (Math.abs(S.juice - shownJuice) < 0.6) shownJuice = S.juice;
+
+  lifePop *= 0.86; if (lifePop < 0.002) lifePop = 0;
+  elLife.style.transform = lifePop ? `scale(${(1 + lifePop).toFixed(3)})` : '';
+
+  comboStep(dt);
+  jelly(dt);
+  draw(dt);
+  checkRank();
+
+  hudAcc += dt;
+  if (hudAcc > 0.07){ hudAcc = 0; render(); }
+
+  /* heat leans the stage in a little (never #world — it holds a fixed drawer) */
+  arenaEl.style.transform =
+    heat > 0.02 && !REDUCED ? `scale(${(1 + heat * 0.012).toFixed(4)})` : '';
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+setInterval(save, 5000);
+addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+addEventListener('pagehide', save);
+
+if (S.total === 0 && S.taps === 0){
+  setTimeout(() => toast('🍋', 'Welcome to the press', 'Squeeze the lemon. Buy help. Never stop.'), 700);
+}
+})();
+</script>
+</body>
+</html>
